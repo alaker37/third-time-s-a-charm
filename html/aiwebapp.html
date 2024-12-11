@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo</title>
+    <style>
+        body {
+            font-family: "Lato", sans-serif;
+            text-align: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            margin-top: 20px;
+            color: #333;
+        }
+
+        #bingo-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            width: 300px;
+            margin: 20px auto;
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffc8dd;
+            border: 2px solid #bde0fe;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .cell.clicked {
+            background-color: #fb6f92;
+            color: #000;
+        }
+
+        .cell.highlight {
+            background-color: #a2d2ff;
+        }
+
+        .cell.free {
+            background-color: #ffafcc;
+            color: #000;
+        }
+
+        #reset-btn, #generate-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #cdb4db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: "Lato", sans-serif;
+        }
+
+        #reset-btn:hover, #generate-btn:hover {
+            background-color: #a2d2ff;
+        }
+
+        #message {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+            font-family: "Lato", sans-serif;
+        }
+
+        #counter {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #333;
+            font-family: "Lato", sans-serif;
+        }
+
+        #confetti {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bingo</h1>
+    <div id="bingo-board"></div>
+    <button id="generate-btn">Generate Number</button>
+    <button id="reset-btn">Reset Game</button>
+    <p id="message"></p>
+    <p id="counter">Numbers Generated: 0</p>
+    <canvas id="confetti"></canvas>
+
+    <script>
+        const boardSize = 5;
+        const maxNumber = 100;
+        const bingoBoard = document.getElementById('bingo-board');
+        const message = document.getElementById('message');
+        const counter = document.getElementById('counter');
+        const resetBtn = document.getElementById('reset-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        const confettiCanvas = document.getElementById('confetti');
+
+        let board = [];
+        let calledNumbers = new Set();
+        let confettiActive = false;
+
+        function createBoard() {
+            bingoBoard.innerHTML = '';
+            board = [];
+            calledNumbers.clear();
+            counter.textContent = 'Numbers Generated: 0';
+            stopConfetti();
+
+            const numbers = Array.from({ length: maxNumber }, (_, i) => i + 1).sort(() => Math.random() - 0.5);
+            const freeIndex = Math.floor(boardSize * boardSize / 2);
+
+            for (let i = 0; i < boardSize * boardSize; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+
+                if (i === freeIndex) {
+                    cell.textContent = 'FREE';
+                    cell.classList.add('free');
+                } else {
+                    const num = numbers.pop();
+                    cell.textContent = num;
+                }
+
+                cell.addEventListener('click', () => handleCellClick(i));
+                cell.addEventListener('dblclick', () => handleCellDoubleClick(i));
+
+                board.push({
+                    number: i === freeIndex ? null : cell.textContent,
+                    clicked: false
+                });
+
+                bingoBoard.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(index) {
+            const cell = bingoBoard.children[index];
+            board[index].clicked = !board[index].clicked;
+
+            if (board[index].clicked) {
+                cell.classList.add('clicked');
+            } else {
+                cell.classList.remove('clicked');
+            }
+
+            checkBingo();
+        }
+
+        function handleCellDoubleClick(index) {
+            const cell = bingoBoard.children[index];
+            if (board[index].clicked) {
+                board[index].clicked = false;
+                cell.classList.remove('clicked');
+            }
+        }
+
+        function highlightNumber(number) {
+            board.forEach((cellData, index) => {
+                const cell = bingoBoard.children[index];
+                cell.classList.remove('highlight');
+                if (cellData.number == number) {
+                    cell.classList.add('highlight');
+                }
+            });
+        }
+
+        function checkBingo() {
+            // Check rows
+            for (let i = 0; i < boardSize; i++) {
+                if (board.slice(i * boardSize, (i + 1) * boardSize).every(cell => cell.clicked)) {
+                    displayWinMessage();
+                    return;
+                }
+            }
+
+            // Check columns
+            for (let i = 0; i < boardSize; i++) {
+                if (Array.from({ length: boardSize }, (_, j) => board[j * boardSize + i]).every(cell => cell.clicked)) {
+                    displayWinMessage();
+                    return;
+                }
+            }
+
+            // Check diagonals
+            if (Array.from({ length: boardSize }, (_, i) => board[i * (boardSize + 1)]).every(cell => cell.clicked) ||
+                Array.from({ length: boardSize }, (_, i) => board[(i + 1) * (boardSize - 1)]).every(cell => cell.clicked)) {
+                displayWinMessage();
+                return;
+            }
+        }
+
+        function displayWinMessage() {
+            message.textContent = 'Bingo! You win!';
+            Array.from(bingoBoard.children).forEach(cell => cell.removeEventListener('click', handleCellClick));
+            launchConfetti();
+        }
+
+        function generateNumber() {
+            if (calledNumbers.size >= maxNumber) {
+                message.textContent = 'All numbers have been called!';
+                return;
+            }
+
+            let number;
+            do {
+                number = Math.floor(Math.random() * maxNumber) + 1;
+            } while (calledNumbers.has(number));
+
+            calledNumbers.add(number);
+            message.textContent = `Next number: ${number}`;
+            counter.textContent = `Numbers Generated: ${calledNumbers.size}`;
+            highlightNumber(number);
+        }
+
+        function launchConfetti() {
+            const confetti = confettiCanvas.getContext('2d');
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+
+            const particles = Array.from({ length: 100 }, () => ({
+                x: Math.random() * confettiCanvas.width,
+                y: Math.random() * confettiCanvas.height,
+                r: Math.random() * 5 + 2,
+                dx: Math.random() * 4 - 2,
+                dy: Math.random() * -5 - 2,
+                color: `hsl(${Math.random() * 360}, 100%, 50%)`
+            }));
+
+            confettiActive = true;
+
+            function render() {
+                if (!confettiActive) return;
+                confetti.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+                particles.forEach(p => {
+                    confetti.beginPath();
+                    confetti.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    confetti.fillStyle = p.color;
+                    confetti.fill();
+                    p.x += p.dx;
+                    p.y += p.dy;
+                    p.dy += 0.1;
+
+                    if (p.y > confettiCanvas.height || p.x < 0 || p.x > confettiCanvas.width) {
+                        p.x = Math.random() * confettiCanvas.width;
+                        p.y = 0;
+                        p.dy = Math.random() * -5 - 2;
+                    }
+                });
+                requestAnimationFrame(render);
+            }
+
+            render();
+        }
+
+        function stopConfetti() {
+            confettiActive = false;
+            const confetti = confettiCanvas.getContext('2d');
+            confetti.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        }
+
+        resetBtn.addEventListener('click', createBoard);
+        generateBtn.addEventListener('click', generateNumber);
+
+        createBoard();
+    </script>
+</body>
+</html>
